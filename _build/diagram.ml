@@ -149,10 +149,11 @@ let regions_voronoi distance_function voronoi =
       min_dist = ref (distance_function (0, 0) (columns, lines)) in
       for k = 0 to (seeds_number - 1) do
         let dist = distance_function (x, y) (voronoi.seeds.(k).x, voronoi.seeds.(k).y) in
-        if dist < !min_dist then (
-          min_dist := dist;
-          index := k;
-        );
+        if dist < !min_dist then
+          begin
+            min_dist := dist;
+            index := k;
+          end;
       done;
       matrix.(x).(y) <- !index;
     done;
@@ -175,11 +176,12 @@ let draw_voronoi distance_function voronoi =
           || ((y < lines - 1) && (matrix.(x).(y) <> matrix.(x).(y+1))))
       then
         set_color black
-      else (
-        match voronoi.seeds.(matrix.(x).(y)).c with
-        | None -> set_color white
-        | Some(rgb) -> set_color rgb
-      );
+      else
+        begin
+          match voronoi.seeds.(matrix.(x).(y)).c with
+          | None -> set_color white
+          | Some(rgb) -> set_color rgb
+        end;
       plot x y;
     done;
   done;
@@ -279,8 +281,8 @@ let colored_seeds = is_seed_colored v1;;
 let matrix = regions_voronoi euclidean_distance v1;;
 let adjacences_matrix = adjacences_voronoi v1 matrix;;
 
-Solver.solve (produce_constraints colored_seeds adjacences_matrix);;
+let s = Solver.solve (produce_constraints colored_seeds adjacences_matrix);;
 
-draw_voronoi (make_distance 2.) v1;;
+(* draw_voronoi (make_distance 2.) v1;;
 
-wait_next_event [Button_down];;
+wait_next_event [Button_down];; *)

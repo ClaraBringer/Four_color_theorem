@@ -1,18 +1,18 @@
 ### Starting build.
 # Target: diagram.ml.depends, tags: { extension:ml, file:diagram.ml, ocaml, ocamldep, quiet }
-/usr/bin/ocamldep -modules diagram.ml > diagram.ml.depends
+/usr/bin/ocamldep -modules diagram.ml > diagram.ml.depends # cached
 # Target: sat_solver.mli.depends, tags: { extension:mli, file:sat_solver.mli, ocaml, ocamldep, quiet }
 /usr/bin/ocamldep -modules sat_solver.mli > sat_solver.mli.depends # cached
 # Target: sat_solver.cmi, tags: { byte, compile, extension:mli, file:sat_solver.mli, interf, ocaml, quiet }
 /usr/bin/ocamlc -c -I /usr/lib/ocaml -o sat_solver.cmi sat_solver.mli # cached
 # Target: diagram.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:diagram.cmo, file:diagram.ml, implem, ocaml, quiet }
-/usr/bin/ocamlc -c -I /usr/lib/ocaml -o diagram.cmo diagram.ml
+/usr/bin/ocamlc -c -I /usr/lib/ocaml -o diagram.cmo diagram.ml # cached
 # Target: sat_solver.ml.depends, tags: { extension:ml, file:sat_solver.ml, ocaml, ocamldep, quiet }
 /usr/bin/ocamldep -modules sat_solver.ml > sat_solver.ml.depends # cached
 # Target: sat_solver.cmx, tags: { compile, extension:cmx, extension:ml, file:sat_solver.cmx, file:sat_solver.ml, implem, native, ocaml, quiet }
 /usr/bin/ocamlopt -c -I /usr/lib/ocaml -o sat_solver.cmx sat_solver.ml # cached
 # Target: diagram.cmx, tags: { compile, extension:cmx, extension:ml, file:diagram.cmx, file:diagram.ml, implem, native, ocaml, quiet }
-/usr/bin/ocamlopt -c -I /usr/lib/ocaml -o diagram.cmx diagram.ml
+/usr/bin/ocamlopt -c -I /usr/lib/ocaml -o diagram.cmx diagram.ml # cached
 # Target: diagram.native, tags: { dont_link_with, extension:native, file:diagram.native, link, native, ocaml, program, quiet }
-/usr/bin/ocamlopt -I /usr/lib/ocaml /usr/lib/ocaml/graphics.cmxa sat_solver.cmx diagram.cmx -o diagram.native
+/usr/bin/ocamlopt -I /usr/lib/ocaml /usr/lib/ocaml/graphics.cmxa sat_solver.cmx diagram.cmx -o diagram.native # cached
 # Compilation successful.
