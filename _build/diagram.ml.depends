@@ -1,1 +1,1 @@
-diagram.ml: Array Graphics Sat_solver
+diagram.ml: Array Graphics List Sat_solver
