@@ -1,17 +1,8 @@
 open Graphics;;
+open Voronoi;;
+open Examples;;
 
-type seed = {
-  mutable c : color option;
-  x : int;
-  y : int
-}
-;;
-
-type voronoi = {
-  dim : int * int;
-  seeds : seed array
-}
-;;
+let grey = rgb 200 200 200
 
 module Variables_Voronoi =
 struct
@@ -25,101 +16,6 @@ struct
 end;;
 
 module Solver = Sat_solver.Make (Variables_Voronoi);;
-
-let v1 = {
-  dim = 200,200;
-  seeds = [|
-    {c = Some red; x=50; y=100};
-    {c = Some green; x=100; y=50};
-    {c = None; x=100; y=150};
-    {c = None; x=150; y=100};
-    {c = Some blue; x=100; y=100}
-  |]
-}
-
-let v2 = {
-  dim = 600,600;
-  seeds = [|
-    {c = None; x=100; y=100};
-    {c = Some red; x=125; y=550};
-    {c = None; x=250; y=50};
-    {c = Some blue; x=150; y=250};
-    {c = None; x=250; y=300};
-    {c = None; x=300; y=500};
-    {c = Some red; x=400; y=100};
-    {c = None; x=450; y=450};
-    {c = None; x=500; y=250};
-    {c = Some yellow; x=575; y=350};
-    {c = Some green; x=300; y=300};
-    {c = None; x=75; y=470};
-  |]
-}
-
-let v3 = {
-  dim = 600,600;
-  seeds = [|
-    {c = None; x=100; y=100};
-    {c = Some red; x=125; y=550};
-    {c = None; x=250; y=50};
-    {c = Some blue; x=150; y=250};
-    {c = None; x=250; y=300};
-    {c = None; x=300; y=500};
-    {c = Some red; x=400; y=100};
-    {c = None; x=450; y=450};
-    {c = None; x=500; y=250};
-    {c = None; x=575; y=350};
-    {c = Some green; x=300; y=300};
-    {c = None; x=75; y=470};
-    {c = None; x=10; y=14};
-    {c = Some red; x=122; y=55};
-    {c = None; x=25; y=345};
-    {c = Some blue; x=23; y=550};
-    {c = None; x=25; y=30};
-    {c = None; x=367; y=530};
-    {c = None; x=434; y=10};
-    {c = None; x=45; y=50};
-    {c = None; x=50; y=25};
-    {c = Some yellow; x=578; y=550};
-    {c = Some green; x=30; y=350};
-    {c = None; x=375; y=47};
-  |]
-}
-
-let v4 = {
-  dim = 800,800;
-  seeds = [|
-    {c = None; x=100; y=75};
-    {c = None; x=125; y=225};
-    {c = Some red; x=25; y=255};
-    {c = None; x=60; y=305};
-    {c = Some blue; x=50; y=400};
-    {c = Some green; x=100; y=550};
-    {c = Some green; x=150; y=25};
-    {c = Some red; x=200; y=55};
-    {c = None; x=200; y=200};
-    {c = None; x=250; y=300};
-    {c = None; x=300; y=450};
-    {c = None; x=350; y=10};
-    {c = None; x=357; y=75};
-    {c = Some yellow; x=450; y=80};
-    {c = Some blue; x=400; y=150};
-    {c = None; x=550; y=350};
-    {c = None; x=400; y=450};
-    {c = None; x=400; y=500};
-    {c = Some red; x=500; y=75};
-    {c = Some green; x=600; y=100};
-    {c = Some red; x=700; y=75};
-    {c = None; x=578; y=175};
-    {c = None; x=750; y=205};
-    {c = None; x=520; y=345};
-    {c = None; x=678; y=420};
-    {c = None; x=600; y=480};
-    {c = Some blue; x=650; y=480};
-    {c = None; x=750; y=500};
-    {c = None; x=600; y=550};
-    {c = Some red; x=700; y=550};
-  |]
-}
 
 (* Construit une chaine de caractères à partir d'une dimension
    (i, j) : dimension
@@ -135,14 +31,12 @@ let make_distance q =
   fun (x1, y1) (x2, y2) -> (float_of_int (abs (x1 - x2)))**q +. (float_of_int (abs (y1 - y2)))**q
 ;;
 
-(* Crée la distance euclidienne
-   return : la distance euclidienne *)
+(* La distance euclidienne*)
 let euclidean_distance =
   make_distance 2.
 ;;
 
-(* Crée la distance taxicab
-   return : la distance taxicab *)
+(* La distance taxicab *)
 let taxicab_distance =
   make_distance 1.
 ;;
@@ -174,20 +68,51 @@ let regions_voronoi voronoi distance_function =
   matrix
 ;;
 
+let draw_color_circles () =
+  let colors = [|white; red; green; blue; yellow|] in
+  for i = 0 to 4 do
+    let x = size_x () - 250 and
+    y = (size_y () * (i + 1)) / 6 - (size_y ()) / 12 and
+    circle_width = 100 and
+      circle_height = (size_y ()) / 6 in
+    let radius = ((min circle_width circle_height) - 5) / 2 in
+    set_color black;
+    draw_circle x y radius;
+    set_color colors.(i);
+    fill_circle x y (radius - 1);
+  done;
+;;
+
+let draw_buttons game_state =
+  set_color black;
+  if game_state = 1 then
+    let x = size_x () - 190 and
+    y = size_y () / 3 and
+    width = 180 and
+    height = (size_y () / 2) - (size_y () / 3) in
+    draw_rect x y width height;
+    set_color grey;
+    fill_rect (x + 1) (y + 1) (width - 2) (height - 2);
+    moveto (x + width/3) (y + height/2);
+    set_color black;
+    draw_string "Solution"
+;;
+
 (* Dessine le diagramme
    voronoi : un diagramme de Voronoi
    matrix_regions : la matrice des régions associée à voronoi *)
 let draw_voronoi voronoi matrix_regions =
   let columns = Array.length matrix_regions and
   lines = Array.length matrix_regions.(0) in
-  open_graph (" "^(string_of_int columns)^"x"^(string_of_int lines));
+  open_graph (" "^(string_of_int (columns + 300))^"x"^(string_of_int lines));
   auto_synchronize false;
   for x = 0 to (columns - 1) do
     for y = 0 to (lines - 1) do
       if (((x > 1) && (matrix_regions.(x).(y) <> matrix_regions.(x-1).(y)))
           || ((x < columns - 1) && (matrix_regions.(x).(y) <> matrix_regions.(x+1).(y)))
           || ((y > 1) && (matrix_regions.(x).(y) <> matrix_regions.(x).(y-1)))
-          || ((y < lines - 1) && (matrix_regions.(x).(y) <> matrix_regions.(x).(y+1))))
+          || ((y < lines - 1) && (matrix_regions.(x).(y) <> matrix_regions.(x).(y+1)))
+          || x = columns - 1)
       then
         set_color black
       else
@@ -199,6 +124,8 @@ let draw_voronoi voronoi matrix_regions =
       plot x y;
     done;
   done;
+  draw_color_circles ();
+  draw_buttons 1;
   synchronize ()
 ;;
 
@@ -372,16 +299,20 @@ let win voronoi adjacences_matrix =
 ;;
 
 (* Fonction main *)
-let main diagram =
-  (* TODO : choisir aléatoirement un diagramme au lieu de le passer en argument *)
+let main =
+  Random.self_init ();
+  let index_diagram = Random.int (Array.length diagrams) in
+  let diagram = diagrams.(index_diagram) in
   let matrix_regions = regions_voronoi diagram euclidean_distance in
-  let initial_colored_seeds = is_seed_colored diagram and
+
+  draw_voronoi diagram matrix_regions;
+  wait_next_event [Button_down];
+
+  (* let initial_colored_seeds = is_seed_colored diagram and
   adjacences_matrix = adjacences_voronoi diagram matrix_regions in
   let constraints = produce_constraints initial_colored_seeds adjacences_matrix in
-  let solved_diagram = solve_voronoi diagram constraints in
-  draw_voronoi solved_diagram matrix_regions;
+  let solved_diagram = solve_voronoi diagram constraints in *)
 
-  wait_next_event [Button_down]
 ;;
 
-main v4;;
+main;;
