@@ -98,6 +98,6 @@ let v4 =  {
   |]
 }
 
-let diagrams = [|v1; v2; v3; v4|];;
+let diagrams = [v1; v2; v3; v4];;
 
 (*ADD other voronoi of 30/40 seeds, for example taken from the web-site*)
