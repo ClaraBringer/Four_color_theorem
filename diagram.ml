@@ -209,7 +209,7 @@ let is_seed_colored voronoi =
   colored_seeds
 ;;
 
-(* Vérifie s'il existe une couleur à une région
+(* Vérifie que chaque région a au moins une couleur
    colored_seeds : un tableau de couleur des régions
    return : une liste de clauses *)
 let exists colored_seeds =
@@ -217,10 +217,15 @@ let exists colored_seeds =
   exist_array = ref [] in
   for i = 0 to (seeds_number - 1) do
     let clause = ref [] in
-    for c = 1 to 4 do
-      clause := (true, (i, colors.(c)))::(!clause)
-    done;
-    exist_array := (!clause)::(!exist_array)
+    match colored_seeds.(i) with
+    | Some(rgb) -> clause := (true, (i, rgb))::(!clause)
+    | None ->
+      begin
+        for c = 1 to 4 do
+          clause := (true, (i, colors.(c)))::(!clause)
+        done;
+        exist_array := (!clause)::(!exist_array)
+      end
   done;
   !exist_array
 ;;
@@ -232,12 +237,23 @@ let unique colored_seeds =
   let seeds_number = Array.length colored_seeds and
   unique_array = ref [] in
   for i = 0 to (seeds_number - 1) do
-    for c = 1 to 4 do
-      for c' = 1 to 4 do
-        if c <> c' then
-          unique_array := [(false, (i, colors.(c))); (false, (i, colors.(c')))]::(!unique_array)
-      done;
-    done;
+    match colored_seeds.(i) with
+    | None ->
+      begin
+        for c = 1 to 4 do
+          for c' = 1 to 4 do
+            if c <> c' then
+              unique_array := [(false, (i, colors.(c))); (false, (i, colors.(c')))]::(!unique_array)
+          done;
+        done;
+      end
+    | Some(rgb) ->
+      begin
+        for c = 1 to 4 do
+          if rgb <> colors.(c) then
+            unique_array := [(false, (i, rgb)); (false, (i, colors.(c)))]::(!unique_array)
+        done;
+      end
   done;
   !unique_array
 ;;
@@ -250,12 +266,30 @@ let adjacent colored_seeds adjacences_matrix =
   let seeds_number = Array.length colored_seeds and
   adjacent = ref [] in
   for i = 0 to (seeds_number - 1) do
-    for i' = 0 to (seeds_number - 1) do
-      if adjacences_matrix.(i).(i') then
-        for c = 1 to 4 do
-          adjacent := [(false, (i, colors.(c))); (false, (i', colors.(c)))]::(!adjacent)
+    match colored_seeds.(i) with
+    | None ->
+      begin
+        for i' = 0 to (seeds_number - 1) do
+          if adjacences_matrix.(i).(i') then
+            match colored_seeds.(i') with
+            | None ->
+              begin
+                for c = 1 to 4 do
+                  adjacent := [(false, (i, colors.(c))); (false, (i', colors.(c)))]::(!adjacent)
+                done;
+              end
+            | Some(rgb) -> adjacent := [(false, (i, rgb))]::(!adjacent)
         done;
-    done;
+      end
+    | Some(rgb1) ->
+      begin
+        for i' = 0 to (seeds_number - 1) do
+          if adjacences_matrix.(i).(i') then
+            match colored_seeds.(i') with
+            | None -> adjacent := [(false, (i', rgb1))]::(!adjacent)
+            | Some(rgb2) -> adjacent := !adjacent
+        done;
+      end
   done;
   !adjacent
 ;;
@@ -282,23 +316,12 @@ let rec color_to_seed voronoi l =
     end
 ;;
 
-let rec print_list_color (Some(l)) =
-  match l with
-  | [] -> print_string "\n"
-  | (b, (i, c))::l2 ->
-    begin
-      print_string ("index de région "^(string_of_int i)^", couleur "^(string_of_color_option (Some(c)))^"\n");
-      print_list_color (Some(l2))
-    end
-;;
-
 (* Renvoie une solution d'un diagramme
    voronoi : un diagramme de Voronoi
    constraints : la liste des contraintes
    return : un diagramme de Voronoi *)
 let solve_voronoi voronoi constraints =
   let solution = Solver.solve constraints in
-  print_list_color solution;
   match solution with
   | None -> failwith "Aucune solution"
   | Some(l) -> color_to_seed voronoi l
@@ -385,8 +408,6 @@ let draw_string_message message =
   moveto (size_x () - 280) (11 * size_y () / 12);
   set_color black;
   draw_string message;
-  (* let oc = open_out message in
-  flush oc; *)
   synchronize ()
 ;;
 
@@ -473,6 +494,27 @@ let rec second_click voronoi matrix_regions =
     end
 ;;
 
+(* Renvoie un entier selon la suite du jeu
+   return : 0 si le bouton "Rejouer" est sélectionné, 1 si le bouton "Quitter" est sélectionné *)
+let rec third_click () =
+  let return_value = ref (-1) in
+  let wne = wait_next_event [Button_down] in
+  let x = wne.mouse_x and
+    y = wne.mouse_y in
+  if (x <= size_x () - 10) && (x >= size_x () - 190) && (y <= size_y () / 3) && (y >= size_y () / 6) then   (* si on a cliqué sur le bouton "Rejouer" *)
+    begin
+      return_value := 0;
+      !return_value
+    end
+  else if (x <= size_x () - 10) && (x >= size_x () - 190) && (y <= 2 * size_y () / 3) && (y >= size_y () / 2) then    (* si on a cliqué sur le bonton "Quitter" *)
+    begin
+      return_value := 1;
+      !return_value
+    end
+  else
+    third_click ()
+;;
+
 (* Fonction principale
    diagram_list : la liste des diagrammes non encore joués *)
 let rec main diagram_list =
@@ -491,6 +533,8 @@ let rec main diagram_list =
 
   auto_synchronize false;
 
+  let has_won = ref false in
+
   while !game_state = 1 do    (* au cours du jeu *)
     let color_option = ref None and
     index_region = ref (-1) in
@@ -498,8 +542,8 @@ let rec main diagram_list =
     let s = ref true and
       g = ref true in
 
-    let integer1 = first_click () in      (* première action *)
-    if integer1 = Array.length colors then                                  (* si le bouton "Solution" a été sélectionné *)
+    let action1 = first_click () in      (* première action *)
+    if action1 = Array.length colors then                                  (* si le bouton "Solution" a été sélectionné *)
       begin
         let colored_seeds = is_seed_colored !diagram in                           (* tableau des couleurs pour chaque région à ce stade du jeu *)
         let constraints = produce_constraints colored_seeds adjacences_matrix in
@@ -509,13 +553,13 @@ let rec main diagram_list =
         game_state := 2;
         s := false
       end
-    else if (integer1 >= 0) && (integer1 < Array.length colors) then        (* si une couleur a été sélectionnée *)
-      color_option := Some(colors.(integer1));
+    else if (action1 >= 0) && (action1 < Array.length colors) then        (* si une couleur a été sélectionnée *)
+      color_option := Some(colors.(action1));
 
     while !s do
       begin
-        let integer2 = second_click !diagram matrix_regions in                        (* deuxième action *)
-        if integer2 = Array.length !diagram.seeds then                                (* si le bouton "Solution" a été sélectionné *)
+        let action2 = second_click !diagram matrix_regions in                        (* deuxième action *)
+        if action2 = Array.length !diagram.seeds then                                (* si le bouton "Solution" a été sélectionné *)
           begin
             let colored_seeds = is_seed_colored !diagram in                                 (* tableau des couleurs pour chaque région à ce stade du jeu *)
             let constraints = produce_constraints colored_seeds adjacences_matrix in
@@ -525,14 +569,14 @@ let rec main diagram_list =
             game_state := 2;
             s := false
           end
-        else if integer2 < Array.length !diagram.seeds then                           (* si une région a été sélectionnée *)
+        else if action2 < Array.length !diagram.seeds then                           (* si une région a été sélectionnée *)
           begin
-            index_region := integer2;
+            index_region := action2;
             s := false
           end
-        else if integer2 >= 100 then                                                  (* si une nouvelle couleur a été sélectionnée *)
+        else if action2 >= 100 then                                                  (* si une nouvelle couleur a été sélectionnée *)
           begin
-            let index = integer2 / 100 in
+            let index = action2 / 100 in
             color_option := Some(colors.(index))
           end
       end
@@ -549,40 +593,40 @@ let rec main diagram_list =
           | Some(rgb) -> (color := rgb)
           | None -> (color := white)
         end;
-        let region = !diagram.seeds.(!index_region) in    (* choix d'une région à colorer *)
+        let region = !diagram.seeds.(!index_region) in    (* la région à colorer *)
         match region.c with
         | None ->                                         (* si la région est vide *)
           begin
             color_region !diagram region !color matrix_regions;
             if (win !diagram adjacences_matrix) then      (* si la combinaison est gagnante *)
               begin
-                draw_string_message "Felicitations ! Vous avez gagne !";
+                has_won := true;
                 game_state := 2
               end
           end
-        | Some(rgb) ->                                            (* si la région est colorée *)
+        | Some(rgb) ->                                    (* si la région est colorée *)
           begin
             if initial_colored_seeds.(!index_region) = None then   (* si la région n'est initialement pas colorée *)
               begin
                 change_region !diagram initial_colored_seeds !index_region !color matrix_regions;
                 synchronize ()
               end;
-            if (win !diagram adjacences_matrix) then              (* si la combinaison est gagnante *)
+            if (win !diagram adjacences_matrix) then               (* si la combinaison est gagnante *)
               begin
-                draw_string_message "Felicitations ! Vous avez gagne !";
+                has_won := true;
                 game_state := 2
               end
           end
       end
   done;
 
-  if !game_state = 2 then   (* si le joueur a gagné ou s'il a affiché la solution *)
+  if !game_state = 2 then     (* si le joueur a gagné ou s'il a affiché la solution *)
     begin
       draw_voronoi !diagram matrix_regions !game_state;
-      let wne = wait_next_event [Button_down] in
-      let x = wne.mouse_x and
-        y = wne.mouse_y in
-      if (x <= size_x () - 10) && (x >= size_x () - 190) && (y <= size_y () / 3) && (y >= size_y () / 6) then   (* si on a cliqué sur le bouton "Rejouer" *)
+      if !has_won then
+        draw_string_message "Félicitations ! Vous avez gagné !";
+      let action = third_click () in
+      if action = 0 then         (* si on a cliqué sur le bouton "Rejouer" *)
         begin
           let new_diagram_list = delete_diagram !diagram diagram_list in
           if List.length new_diagram_list = 0 then    (* s'il n'y a plus aucune grille à jouer *)
@@ -593,7 +637,7 @@ let rec main diagram_list =
               main new_diagram_list                   (* crée une nouvelle partie *)
             end
         end
-      else if (x <= size_x () - 10) && (x >= size_x () - 190) && (y <= 2 * size_y () / 3) && (y >= size_y () / 2) then    (* si on a cliqué sur le bonton "Quitter" *)
+      else if action = 1 then    (* si on a cliqué sur le bonton "Quitter" *)
         close_graph ()
     end
 ;;
