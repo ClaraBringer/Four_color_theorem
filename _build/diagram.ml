@@ -1,9 +1,12 @@
 open Graphics;;
 open Voronoi;;
 open Examples;;
-open Unix;;
 
 let grey = rgb 200 200 200;;
+
+type game_state = Initialization | In_game | Between_games;;
+
+exception No_solution_exception;;
 
 module Variables_Voronoi =
 struct
@@ -136,10 +139,10 @@ let draw_buttons game_state =
   let x = size_x () - 190 and
     width = 180 and
     height = size_y () / 6 in
-  if game_state = 1 then
+  if game_state = In_game then
     let y = size_y () / 3 in
     draw_button x y width height "Solution"
-  else if game_state = 2 then
+  else if game_state = Between_games then
     let y_play = size_y () / 6 and
     y_quit = size_y () / 2 in
     draw_button x y_play width height "Play again";
@@ -277,7 +280,10 @@ let adjacent colored_seeds adjacences_matrix colors =
             | Some(rgb2) ->
               begin
                 if rgb1 = rgb2 then
-                  failwith "No solution"
+                  begin
+                    print_string "No solution!\n";
+                    raise No_solution_exception
+                  end
               end
         done;
       end
@@ -299,7 +305,7 @@ let produce_constraints colored_seeds colors adjacences_matrix =
  * l : la liste à parcourir *)
 let rec color_to_seed voronoi l =
   match l with
-  | [] -> failwith "Pas d'élément"
+  | [] -> failwith "Pas d'élément\n"
   | [(b, (index, color))] -> voronoi.seeds.(index).c <- Some(color)
   | (b, (index, color))::l2 ->
     begin
@@ -315,7 +321,11 @@ let rec color_to_seed voronoi l =
 let solve_voronoi voronoi constraints =
   let solution = Solver.solve constraints in
   match solution with
-  | None -> failwith "No solution"
+  | None ->
+    begin
+      print_string "No solution!\n";
+      raise No_solution_exception
+    end
   | Some(l) -> color_to_seed voronoi l
     ;
   voronoi
@@ -329,22 +339,21 @@ let solve_voronoi voronoi constraints =
  * colors : le tableau des couleurs du diagramme *)
 let color_region voronoi region color matrix_regions colors =
   region.c <- Some(color);
-  draw_voronoi voronoi matrix_regions 1 colors
+  draw_voronoi voronoi matrix_regions In_game colors
 ;;
 
 (* Modifie une région coloriée : si color vaut white, la couleur est supprimée, sinon la couleur est modifiée
  * voronoi : un diagramme de Voronoi
- * initial_colored_seeds : le tableau initial des couleurs des régions
- * index_region : l'indice de la région du diagramme
+ * region : la région du diagramme
  * color : une couleur
  * matrix_regions : la matrice des régions associée à voronoi
  * colors : le tableau des couleurs du diagramme *)
-let change_region voronoi initial_colored_seeds index_region color matrix_regions colors =
+let change_region voronoi region color matrix_regions colors =
   if color = white then
-    voronoi.seeds.(index_region).c <- None
+    region.c <- None
   else
-    voronoi.seeds.(index_region).c <- Some(color);
-  draw_voronoi voronoi matrix_regions 1 colors
+    region.c <- Some(color);
+  draw_voronoi voronoi matrix_regions In_game colors
 ;;
 
 (* Vérifie si la configuration est gagnante
@@ -498,22 +507,11 @@ let rec delete_diagram diagram diagram_list =
     end
 ;;
 
-(* Fonction principale
- * diagram_list : la liste des diagrammes non encore joués *)
-let rec main diagram_list =
-  let distance = taxicab_distance in
-  let game_state = ref 0 in           (* initialisation du jeu *)
-  Random.self_init ();
-  let index_diagram = Random.int (List.length diagram_list) in
-  let diagram = ref (List.nth diagram_list index_diagram) in                (* choix aléatoire d'un diagramme parmi ceux non encore joués *)
-  let matrix_regions = regions_voronoi !diagram distance in                 (* matrice des régions du diagramme *)
-  let adjacences_matrix = adjacences_voronoi !diagram matrix_regions in     (* matrice des adjacences des régions du diagramme *)
-  let initial_colored_seeds = is_seed_colored !diagram in                   (* tableau des couleurs pour chaque région au début du jeu *)
-
+let colors_array voronoi =
   let colors_list = ref [] in
   let colors_number = ref 0 in                              (* le nombre de couleurs dur le diagramme *)
-  for i = 0 to (Array.length !diagram.seeds - 1) do
-    match !diagram.seeds.(i).c with
+  for i = 0 to (Array.length voronoi.seeds - 1) do
+    match voronoi.seeds.(i).c with
     | None -> colors_list := !colors_list
     | Some(rgb) ->
       begin
@@ -526,8 +524,8 @@ let rec main diagram_list =
   done;
 
   let colors = Array.make (!colors_number + 1) white in     (* le tableau des couleurs du diagramme *)
-  for i = 0 to (Array.length !diagram.seeds - 1) do
-    match !diagram.seeds.(i).c with
+  for i = 0 to (Array.length voronoi.seeds - 1) do
+    match voronoi.seeds.(i).c with
     | Some(rgb) ->
       begin
         let already_exists = ref false in
@@ -547,8 +545,24 @@ let rec main diagram_list =
     | None -> colors.(0) <- white
       ;
   done;
+  colors
+;;
 
-  game_state := 1;                    (* début du jeu *)
+(* Fonction principale
+ * diagram_list : la liste des diagrammes non encore joués *)
+let rec main diagram_list =
+  let distance = euclidean_distance in
+  let game_state = ref Initialization in           (* initialisation du jeu *)
+  Random.self_init ();
+  let index_diagram = Random.int (List.length diagram_list) in
+  let diagram = ref (List.nth diagram_list index_diagram) in                (* choix aléatoire d'un diagramme parmi ceux non encore joués *)
+  let matrix_regions = regions_voronoi !diagram distance in                 (* matrice des régions du diagramme *)
+  let adjacences_matrix = adjacences_voronoi !diagram matrix_regions in     (* matrice des adjacences des régions du diagramme *)
+  let initial_colored_seeds = is_seed_colored !diagram in                   (* tableau des couleurs pour chaque région au début du jeu *)
+
+  let colors = colors_array !diagram in
+
+  game_state := In_game;                    (* début du jeu *)
 
   draw_voronoi !diagram matrix_regions !game_state colors;    (* ouverture du graphe *)
 
@@ -556,12 +570,12 @@ let rec main diagram_list =
 
   let has_won = ref false in
 
-  while !game_state = 1 do    (* au cours du jeu *)
+  while !game_state = In_game do    (* au cours du jeu *)
     let color_option = ref None and
     index_region = ref (-1) in
 
-    let s = ref true and
-      g = ref true in
+    let s = ref true and      (* si le second click doit être exécuté *)
+      g = ref true in         (* si une région doit être colorée *)
 
     let action1 = first_click colors in       (* première action *)
     if action1 = Array.length colors then                                 (* si le bouton "Solution" a été sélectionné *)
@@ -571,7 +585,7 @@ let rec main diagram_list =
         diagram := solve_voronoi !diagram constraints;                            (* diagramme résolu *)
         let solved_matrix_regions = regions_voronoi !diagram distance in          (* matrice des régions du diagramme résolu *)
         draw_voronoi !diagram solved_matrix_regions !game_state colors;           (* tracé du graphe résolu *)
-        game_state := 2;                    (* fin du jeu *)
+        game_state := Between_games;                    (* fin du jeu *)
         s := false
       end
     else if (action1 >= 0) && (action1 < Array.length colors) then        (* si une couleur a été sélectionnée *)
@@ -587,7 +601,7 @@ let rec main diagram_list =
             diagram := solve_voronoi !diagram constraints;                        (* diagramme résolu *)
             let solved_matrix_regions = regions_voronoi !diagram distance in      (* matrice des régions du diagramme résolu *)
             draw_voronoi !diagram solved_matrix_regions !game_state colors;       (* tracé du graphe résolu *)
-            game_state := 2;                    (* fin du jeu *)
+            game_state := Between_games;                    (* fin du jeu *)
             s := false
           end
         else if action2 < Array.length !diagram.seeds then                (* si une région a été sélectionnée *)
@@ -603,7 +617,7 @@ let rec main diagram_list =
       end
     done;
 
-    if !game_state = 2 then
+    if !game_state = Between_games then
       g := false;
 
     if !g then
@@ -622,30 +636,30 @@ let rec main diagram_list =
             if (win !diagram adjacences_matrix) then                (* si la combinaison est gagnante *)
               begin
                 has_won := true;
-                game_state := 2
+                game_state := Between_games
               end
           end
         | Some(rgb) ->                                    (* si la région est colorée *)
           begin
             if initial_colored_seeds.(!index_region) = None then    (* si la région n'est initialement pas colorée *)
               begin
-                change_region !diagram initial_colored_seeds !index_region !color matrix_regions colors;
+                change_region !diagram region !color matrix_regions colors;
                 synchronize ()
               end;
             if (win !diagram adjacences_matrix) then                (* si la combinaison est gagnante *)
               begin
                 has_won := true;
-                game_state := 2
+                game_state := Between_games
               end
           end
       end
   done;
 
-  if !game_state = 2 then     (* si le joueur a gagné ou s'il a affiché la solution *)
+  if !game_state = Between_games then     (* si le joueur a gagné ou s'il a affiché la solution *)
     begin
       draw_voronoi !diagram matrix_regions !game_state colors;
       if !has_won then
-        draw_string_message "Congratulations ! You won !";
+        draw_string_message "Congratulations! You won!";
       let action = third_click () in
       if action = 0 then         (* si on a cliqué sur le bouton "Play again" *)
         begin
@@ -653,7 +667,7 @@ let rec main diagram_list =
           if List.length new_diagram_list = 0 then    (* s'il n'y a plus aucune grille à jouer *)
             begin
               close_graph ();
-              print_string "No more diagram !\n"
+              print_string "No more diagram!\n"
             end
           else                                        (* s'il reste une ou des grilles non encore jouée(s) *)
             begin
@@ -666,4 +680,4 @@ let rec main diagram_list =
     end
 ;;
 
-main diagrams;;
+main list;;
